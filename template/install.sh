@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# @APP_NAME@ — Linux-Installer (erzeugt aus vorlage/installieren.sh und installer.conf)
-# Installiert mit einer einzigen Passwortabfrage: benötigte Pakete, einmalige Befehle, das Programm
-# nach ~/.local/share und einen Menüeintrag. Erneut gestartet: aktualisieren oder deinstallieren.
+# @APP_NAME@ @VERSION@ — Linux installer (generated from template/install.sh and installer.conf)
+# Installs with a single password prompt: required packages, one-time commands, the program to
+# ~/.local/share and a menu entry. Run again: update or uninstall.
 set -euo pipefail
 
 TITLE="@APP_NAME@"
 APP_ID="@APP_ID@"
+VERSION="@VERSION@"
 REPO="@REPO@"
 LINUX_FILE="@LINUX_FILE@"
 LINUX_RUN="@LINUX_RUN@"
@@ -22,7 +23,7 @@ elif command -v zenity >/dev/null 2>&1 && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}
 info() { case "$GUI" in 1) kdialog --title "$TITLE" --msgbox "$(printf '%b' "$1")" ;;
                         2) zenity --info --title="$TITLE" --text="$1" --width=380 ;; *) printf '%b\n' "$1" ;; esac; }
 fail() { case "$GUI" in 1) kdialog --title "$TITLE" --error "$(printf '%b' "$1")" ;;
-                        2) zenity --error --title="$TITLE" --text="$1" --width=380 ;; *) printf 'FEHLER: %b\n' "$1" >&2 ;; esac
+                        2) zenity --error --title="$TITLE" --text="$1" --width=380 ;; *) printf 'ERROR: %b\n' "$1" >&2 ;; esac
          exit 1; }
 as_root() { if [ "$GUI" != "0" ] && command -v pkexec >/dev/null 2>&1; then pkexec /bin/sh -c "$1"; else sudo /bin/sh -c "$1"; fi; }
 
@@ -30,25 +31,25 @@ uninstall() {
     rm -rf "$INSTALL_DIR"
     rm -f "$DESKTOP_FILE" "$ICON_FILE"
     command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$HOME/.local/share/applications" || true
-    info "$TITLE wurde entfernt."
+    info "$TITLE has been removed."
     exit 0
 }
 
-# Schon installiert? Dann aktualisieren oder deinstallieren
+# Already installed? Then update or uninstall
 if [ -d "$INSTALL_DIR" ]; then
-    Q="$TITLE ist schon installiert."
+    Q="$TITLE is already installed."
     case "$GUI" in
-        1) set +e; kdialog --title "$TITLE" --yesnocancel "$Q" --yes-label "Aktualisieren" --no-label "Deinstallieren"; CHOICE=$?; set -e ;;
-        2) set +e; OUT=$(zenity --question --title="$TITLE" --text="$Q" --ok-label="Aktualisieren" \
-                --cancel-label="Abbrechen" --extra-button="Deinstallieren"); RC=$?; set -e
-           if [ "$OUT" = "Deinstallieren" ]; then CHOICE=1; elif [ "$RC" = 0 ]; then CHOICE=0; else CHOICE=2; fi ;;
-        *) read -rp "$Q [a]ktualisieren, [d]einstallieren, [x] abbrechen: " A
-           case "$A" in a|A) CHOICE=0 ;; d|D) CHOICE=1 ;; *) CHOICE=2 ;; esac ;;
+        1) set +e; kdialog --title "$TITLE" --yesnocancel "$Q" --yes-label "Update" --no-label "Uninstall"; CHOICE=$?; set -e ;;
+        2) set +e; OUT=$(zenity --question --title="$TITLE" --text="$Q" --ok-label="Update" \
+                --cancel-label="Cancel" --extra-button="Uninstall"); RC=$?; set -e
+           if [ "$OUT" = "Uninstall" ]; then CHOICE=1; elif [ "$RC" = 0 ]; then CHOICE=0; else CHOICE=2; fi ;;
+        *) read -rp "$Q [u]pdate, [r]emove, [x] cancel: " A
+           case "$A" in u|U) CHOICE=0 ;; r|R) CHOICE=1 ;; *) CHOICE=2 ;; esac ;;
     esac
     case "$CHOICE" in 0) ;; 1) uninstall ;; *) exit 0 ;; esac
 fi
 
-# 1) Pakete und einmalige Befehle – alles in einem Schritt, ein Passwort
+# 1) Packages and one-time commands – all in one step, one password
 PKGS=""; HAVE=""; INSTALL=""
 if command -v pacman >/dev/null 2>&1; then PKGS="@PKGS_ARCH@"; HAVE="pacman -Q"; INSTALL="pacman -S --needed --noconfirm"
 elif command -v apt-get >/dev/null 2>&1; then PKGS="@PKGS_DEB@"; HAVE="dpkg -s"; INSTALL="env DEBIAN_FRONTEND=noninteractive apt-get install -y"
@@ -61,27 +62,27 @@ ROOT_CMD=""
 EXTRA='@ROOT_CMDS@'
 [ -n "$EXTRA" ] && ROOT_CMD="${ROOT_CMD:+$ROOT_CMD && }$EXTRA"
 if [ -n "$ROOT_CMD" ]; then
-    MSG="Für $TITLE wird eingerichtet:"
-    [ -n "$MISSING" ] && MSG="$MSG\n\nPakete:$MISSING"
-    [ -n "$EXTRA" ] && MSG="$MSG\n\nEinmalige Einstellungen am System"
-    MSG="$MSG\n\nDanach fragt ein Fenster einmal nach deinem Passwort."
+    MSG="To set up $TITLE:"
+    [ -n "$MISSING" ] && MSG="$MSG\n\nPackages:$MISSING"
+    [ -n "$EXTRA" ] && MSG="$MSG\n\nOne-time system settings"
+    MSG="$MSG\n\nA window will ask for your password once."
     case "$GUI" in
         1) kdialog --title "$TITLE" --continuecancel "$(printf '%b' "$MSG")" || exit 0 ;;
         2) zenity --question --title="$TITLE" --text="$MSG" --width=420 || exit 0 ;;
         *) printf '%b\n' "$MSG" ;;
     esac
-    as_root "$ROOT_CMD" || fail "Die Einrichtung wurde abgebrochen oder ist fehlgeschlagen."
+    as_root "$ROOT_CMD" || fail "Setup was cancelled or failed."
 fi
 
-# 2) Programm herunterladen
-command -v curl >/dev/null 2>&1 || fail "curl fehlt – damit wird das Programm geladen."
+# 2) Download the program
+command -v curl >/dev/null 2>&1 || fail "curl is missing – it is needed to download the program."
 TMP="$(mktemp)"; trap 'rm -f "$TMP"' EXIT
-curl -fsSL --retry 2 -o "$TMP" "$RELEASE_URL/$LINUX_FILE" || fail "Download fehlgeschlagen.\nBesteht eine Internetverbindung?"
+curl -fsSL --retry 2 -o "$TMP" "$RELEASE_URL/$LINUX_FILE" || fail "Download failed.\nIs there an internet connection?"
 mkdir -p "$INSTALL_DIR"
 cp -f "$TMP" "$INSTALL_DIR/$LINUX_FILE"
 chmod 755 "$INSTALL_DIR/$LINUX_FILE"
 
-# 3) Symbol und Menüeintrag
+# 3) Icon and menu entry
 ICON=application-x-executable
 if [ -n "$ICON_PNG" ]; then
     mkdir -p "$(dirname "$ICON_FILE")"
@@ -97,7 +98,8 @@ Comment=@APP_COMMENT@
 Exec=$EXEC
 Icon=$ICON
 Categories=Utility;
+X-AppVersion=$VERSION
 DESKTOP
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$HOME/.local/share/applications" || true
 
-info "Installation abgeschlossen!\n\nStart über das Anwendungsmenü: $TITLE"
+info "$TITLE $VERSION has been installed!\n\nStart it from the application menu: $TITLE"

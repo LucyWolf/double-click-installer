@@ -1,7 +1,7 @@
-# Baut bei jedem veröffentlichten Release die Installer und hängt sie an das Release:
-#   Linux: drei Doppelklick-Installer (.desktop) + Installationsskript
+# Builds the installers on every published release and attaches them to it:
+#   Linux: three double-click installers (.desktop) + install script
 #   Windows: <APP_ID>-setup.exe (Inno Setup)
-# Gesteuert über installer.conf. Diese Datei muss nicht angepasst werden.
+# Controlled by installer.conf. This file does not need to be changed.
 name: Installer
 
 on:
@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release-Tag, z. B. v1.0.1"
+        description: "Release tag, e.g. v1.0.1"
         required: true
 
 permissions:
@@ -25,58 +25,58 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Installer erzeugen
-        run: python3 vorlage/erzeugen.py linux "${{ github.repository }}" "$TAG"
-      - name: Prüfen
+      - name: Build installers
+        run: python3 template/generate.py linux "${{ github.repository }}" "$TAG"
+      - name: Check
         run: |
           shopt -s nullglob
-          for f in ausgabe/*.sh; do bash -n "$f"; done
-          ls -l ausgabe
-      - name: An das Release hängen
+          for f in output/*.sh; do bash -n "$f"; done
+          ls -l output
+      - name: Attach to release
         run: |
           shopt -s nullglob
-          files=(ausgabe/*.sh ausgabe/*.desktop)
+          files=(output/*.sh output/*.desktop)
           [ ${#files[@]} -eq 0 ] || gh release upload "$TAG" "${files[@]}" --clobber --repo "${{ github.repository }}"
 
   windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup-Skript erzeugen
+      - name: Build setup script
         shell: bash
-        run: python vorlage/erzeugen.py windows "${{ github.repository }}" "$TAG"
-      - name: Programmdatei aus dem Release holen
+        run: python template/generate.py windows "${{ github.repository }}" "$TAG"
+      - name: Get program file from the release
         shell: bash
         run: |
-          [ -f ausgabe/setup.iss ] || { echo "Kein Windows-Setup gewünscht"; exit 0; }
-          file=$(tr -d '\r' < ausgabe/setup.iss | sed -n 's/^#define AppExe "\(.*\)"$/\1/p')
-          mkdir -p ausgabe/programm
-          # Wird die Datei erst von einem anderen Workflow hochgeladen, bis zu 10 Minuten warten
+          [ -f output/setup.iss ] || { echo "No Windows setup wanted"; exit 0; }
+          file=$(tr -d '\r' < output/setup.iss | sed -n 's/^#define AppExe "\(.*\)"$/\1/p')
+          mkdir -p output/program
+          # If another workflow uploads the file later, wait up to 10 minutes
           for i in $(seq 1 40); do
-            gh release download "$TAG" -p "$file" -D ausgabe/programm --clobber --repo "${{ github.repository }}" && break
-            echo "warte auf $file im Release …"; sleep 15
+            gh release download "$TAG" -p "$file" -D output/program --clobber --repo "${{ github.repository }}" && break
+            echo "waiting for $file in the release …"; sleep 15
           done
-          [ -f "ausgabe/programm/$file" ] || { echo "$file fehlt im Release $TAG"; exit 1; }
-      - name: Setup bauen
+          [ -f "output/program/$file" ] || { echo "$file is missing in release $TAG"; exit 1; }
+      - name: Build setup
         shell: pwsh
         run: |
-          if (-not (Test-Path ausgabe\setup.iss)) { exit 0 }
+          if (-not (Test-Path output\setup.iss)) { exit 0 }
           choco install innosetup -y --no-progress
-          iscc ausgabe\setup.iss
-      - name: Setup prüfen (still installieren und wieder entfernen)
+          iscc output\setup.iss
+      - name: Test setup (silent install and uninstall)
         shell: pwsh
         run: |
-          $setup = Get-ChildItem ausgabe\ausgabe\*-setup.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          $setup = Get-ChildItem output\output\*-setup.exe -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $setup) { exit 0 }
           $p = Start-Process $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -PassThru -Wait
-          if ($p.ExitCode -ne 0) { throw "Setup: Exitcode $($p.ExitCode)" }
+          if ($p.ExitCode -ne 0) { throw "Setup: exit code $($p.ExitCode)" }
           $uninst = Get-ChildItem "$env:LOCALAPPDATA\Programs\*\unins000.exe" | Select-Object -First 1
-          if (-not $uninst) { throw "Setup hat nichts installiert" }
+          if (-not $uninst) { throw "Setup did not install anything" }
           $u = Start-Process $uninst.FullName -ArgumentList "/VERYSILENT" -PassThru -Wait
-          if ($u.ExitCode -ne 0) { throw "Deinstallation: Exitcode $($u.ExitCode)" }
-      - name: An das Release hängen
+          if ($u.ExitCode -ne 0) { throw "Uninstall: exit code $($u.ExitCode)" }
+      - name: Attach to release
         shell: bash
         run: |
           shopt -s nullglob
-          files=(ausgabe/ausgabe/*-setup.exe)
+          files=(output/output/*-setup.exe)
           [ ${#files[@]} -eq 0 ] || gh release upload "$TAG" "${files[@]}" --clobber --repo "${{ github.repository }}"

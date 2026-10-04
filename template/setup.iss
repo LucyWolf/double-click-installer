@@ -1,5 +1,5 @@
-; Windows-Setup (Inno Setup), erzeugt aus vorlage/setup.iss und installer.conf
-; Installiert pro Benutzer ohne Admin-Rechte, mit Startmenü, Desktop-Verknüpfung und Deinstallation.
+; Windows setup (Inno Setup), generated from template/setup.iss and installer.conf
+; Installs per user without admin rights, with start menu entry, desktop shortcut and uninstaller.
 #define AppName "@APP_NAME@"
 #define AppVersion "@VERSION@"
 #define AppExe "@WINDOWS_FILE@"
@@ -8,13 +8,14 @@
 AppId={{@APP_GUID@}
 AppName={#AppName}
 AppVersion={#AppVersion}
+AppVerName={#AppName} {#AppVersion}
 AppPublisherURL=https://github.com/@REPO@
 DefaultDirName={localappdata}\Programs\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 DisableDirPage=yes
 PrivilegesRequired=lowest
-OutputDir=ausgabe
+OutputDir=output
 OutputBaseFilename=@APP_ID@-setup
 Compression=lzma2
 SolidCompression=yes
@@ -24,14 +25,14 @@ UninstallDisplayIcon={app}\{#AppExe}
 CloseApplications=yes
 
 [Languages]
-Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "programm\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "program\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
