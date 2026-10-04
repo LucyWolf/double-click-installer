@@ -1,4 +1,4 @@
-**Sprache / Language:** [🇩🇪 Deutsch](#doppelklick-installer) | [🇬🇧 English](#double-click-installer)
+**Language / Sprache:** [🇬🇧 English](#double-click-installer) | [🇩🇪 Deutsch](#doppelklick-installer)
 
 ---
 
