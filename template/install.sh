@@ -20,18 +20,37 @@ GUI=0
 if command -v kdialog >/dev/null 2>&1 && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then GUI=1
 elif command -v zenity >/dev/null 2>&1 && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then GUI=2; fi
 
+# Without kdialog/zenity (e.g. a fresh system) there would be no windows and no password prompt:
+# then reopen this script in a terminal, where everything is visible.
+if [ "$GUI" = "0" ] && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && [ ! -t 0 ] && [ -z "${IN_TERMINAL:-}" ]; then
+    SELF="$(readlink -f "$0")"
+    export IN_TERMINAL=1
+    for t in konsole gnome-terminal kgx ptyxis xfce4-terminal alacritty kitty foot wezterm xterm; do
+        command -v "$t" >/dev/null 2>&1 || continue
+        case "$t" in
+            gnome-terminal|kgx|ptyxis) exec "$t" -- bash "$SELF" ;;
+            xfce4-terminal) exec "$t" -x bash "$SELF" ;;
+            kitty|foot) exec "$t" bash "$SELF" ;;
+            wezterm) exec "$t" start -- bash "$SELF" ;;
+            *) exec "$t" -e bash "$SELF" ;;
+        esac
+    done
+fi
+pause_in_terminal() { [ -n "${IN_TERMINAL:-}" ] && [ -t 0 ] && read -rp "Press Enter to close " _ || true; }
+
 info() { case "$GUI" in 1) kdialog --title "$TITLE" --msgbox "$(printf '%b' "$1")" ;;
                         2) zenity --info --title="$TITLE" --text="$1" --width=380 ;; *) printf '%b\n' "$1" ;; esac; }
 fail() { case "$GUI" in 1) kdialog --title "$TITLE" --error "$(printf '%b' "$1")" ;;
                         2) zenity --error --title="$TITLE" --text="$1" --width=380 ;; *) printf 'ERROR: %b\n' "$1" >&2 ;; esac
-         exit 1; }
-as_root() { if [ "$GUI" != "0" ] && command -v pkexec >/dev/null 2>&1; then pkexec /bin/sh -c "$1"; else sudo /bin/sh -c "$1"; fi; }
+         pause_in_terminal; exit 1; }
+as_root() { if [ ! -t 0 ] && command -v pkexec >/dev/null 2>&1; then pkexec /bin/sh -c "$1"; else sudo /bin/sh -c "$1"; fi; }
 
 uninstall() {
     rm -rf "$INSTALL_DIR"
     rm -f "$DESKTOP_FILE" "$ICON_FILE"
     command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$HOME/.local/share/applications" || true
     info "$TITLE has been removed."
+    pause_in_terminal
     exit 0
 }
 
@@ -103,3 +122,4 @@ DESKTOP
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$HOME/.local/share/applications" || true
 
 info "$TITLE $VERSION has been installed!\n\nStart it from the application menu: $TITLE"
+pause_in_terminal
